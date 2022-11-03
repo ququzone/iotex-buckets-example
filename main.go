@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	host = "api.testnet.iotex.one:443"
+	host = "api.iotex.one:443"
 )
 
 func main() {
@@ -37,34 +38,34 @@ func main() {
 	// create client
 	c := iotex.NewAuthedClient(iotexapi.NewAPIServiceClient(conn), acc)
 
-	candidates, err := fetchCandidates(c)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// candidates, err := fetchCandidates(c)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	bucketId, err := createBucket(c, candidates[0])
-	if err != nil {
-		log.Fatalf("create bucket error: %v\n", err)
-	}
-	log.Printf("create bucket #%d\n", bucketId)
+	// bucketId, err := createBucket(c, candidates[0])
+	// if err != nil {
+	// 	log.Fatalf("create bucket error: %v\n", err)
+	// }
+	// log.Printf("create bucket #%d\n", bucketId)
 
-	err = addDeposit(c, bucketId)
-	if err != nil {
-		log.Fatalf("add deposit error: %v\n", err)
-	}
-	log.Println("add deposit successful")
+	// err = addDeposit(c, bucketId)
+	// if err != nil {
+	// 	log.Fatalf("add deposit error: %v\n", err)
+	// }
+	// log.Println("add deposit successful")
 
-	err = changeCandidate(c, bucketId, candidates[1])
-	if err != nil {
-		log.Fatalf("change candidate error: %v\n", err)
-	}
-	log.Println("change candidate successful")
+	// err = changeCandidate(c, bucketId, candidates[1])
+	// if err != nil {
+	// 	log.Fatalf("change candidate error: %v\n", err)
+	// }
+	// log.Println("change candidate successful")
 
-	err = restakeBucket(c, bucketId)
-	if err != nil {
-		log.Fatalf("restake bucket error: %v\n", err)
-	}
-	log.Println("restake bucket  successful")
+	// err = restakeBucket(c, bucketId)
+	// if err != nil {
+	// 	log.Fatalf("restake bucket error: %v\n", err)
+	// }
+	// log.Println("restake bucket  successful")
 
 	// err = unstakeBucket(c, bucketId)
 	// if err != nil {
@@ -72,17 +73,28 @@ func main() {
 	// }
 	// log.Println("unstake bucket successful")
 
-	bucketIds, err := fetchVoterBuckets(c, c.Account().Address().String())
-	if err != nil {
-		log.Fatalf("fetch voter buckets error: %v\n", err)
-	}
-	log.Printf("voter %s has %d buckets\n", c.Account().Address().String(), len(bucketIds))
+	// bucketIds, err := fetchVoterBuckets(c, c.Account().Address().String())
+	// if err != nil {
+	// 	log.Fatalf("fetch voter buckets error: %v\n", err)
+	// }
+	// log.Printf("voter %s has %d buckets\n", c.Account().Address().String(), len(bucketIds))
 
-	bucket, err := fetchBucket(c, bucketIds[0])
-	if err != nil {
-		log.Fatalf("fetch bucket error: %v\n", err)
-	}
-	log.Printf("bucket #%d staking %s IOTX\n", bucket.Index, bucket.StakedAmount)
+	// bucket, err := fetchBucket(c, 100)
+	// if err != nil {
+	// 	log.Fatalf("fetch bucket error: %v\n", err)
+	// }
+	// log.Println(bucket.Index)
+	// log.Println(bucket.CandidateAddress)
+	// log.Println(bucket.StakedAmount)
+	// log.Println(bucket.StakedDuration)
+	// log.Println(bucket.CreateTime.Seconds)
+	// log.Println(bucket.StakeStartTime.Seconds)
+	// log.Println(bucket.UnstakeStartTime.Seconds)
+	// log.Println(bucket.AutoStake)
+	// log.Println(bucket.Owner)
+	// log.Printf("bucket #%d staking %s IOTX\n", bucket.Index, bucket.StakedAmount)
+
+	fmt.Println(fetchTotalStakingAmount(c))
 }
 
 func createBucket(c iotex.AuthedClient, candidateName string) (uint64, error) {
@@ -282,7 +294,37 @@ func fetchBucket(c iotex.AuthedClient, bucketId uint64) (*iotextypes.VoteBucket,
 		return result.Buckets[0], nil
 	}
 
+	log.Printf("receipt %d %s\n", response)
+
 	return nil, nil
+}
+
+func fetchTotalStakingAmount(c iotex.AuthedClient) (string, error) {
+	method := &iotexapi.ReadStakingDataMethod{
+		Method: iotexapi.ReadStakingDataMethod_TOTAL_STAKING_AMOUNT,
+	}
+	methodBytes, err := proto.Marshal(method)
+	if err != nil {
+		return "", err
+	}
+	argumentsBytes, err := buildTotalStakingAmountData()
+	if err != nil {
+		return "", err
+	}
+	response, err := c.API().ReadState(context.Background(), &iotexapi.ReadStateRequest{
+		ProtocolID: []byte("staking"),
+		MethodName: methodBytes,
+		Arguments:  [][]byte{argumentsBytes},
+		Height:     "",
+	})
+
+	var result iotextypes.AccountMeta
+	err = proto.Unmarshal(response.Data, &result)
+	if err != nil {
+		return "", err
+	}
+
+	return result.Balance, nil
 }
 
 func buildReadCandidatesData(offset, limit uint32) ([]byte, error) {
@@ -320,6 +362,15 @@ func buildReadBucketsData(voter string, offset, limit uint32) ([]byte, error) {
 					Limit:  limit,
 				},
 			},
+		},
+	}
+	return proto.Marshal(arguments)
+}
+
+func buildTotalStakingAmountData() ([]byte, error) {
+	arguments := &iotexapi.ReadStakingDataRequest{
+		Request: &iotexapi.ReadStakingDataRequest_TotalStakingAmount_{
+			TotalStakingAmount: &iotexapi.ReadStakingDataRequest_TotalStakingAmount{},
 		},
 	}
 	return proto.Marshal(arguments)
