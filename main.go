@@ -14,6 +14,7 @@ import (
 	"github.com/iotexproject/iotex-antenna-go/v2/iotex"
 	"github.com/iotexproject/iotex-proto/golang/iotexapi"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
+	"github.com/iotexproject/iotex-proto/golang/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -95,6 +96,10 @@ func main() {
 	// log.Printf("bucket #%d staking %s IOTX\n", bucket.Index, bucket.StakedAmount)
 
 	fmt.Println(fetchCandidateByAddress(c, "io13eslm0ae6mdrj2uz7c260aj670wkdywtaye3gk"))
+
+	fmt.Println(fetchTotalBalance(c))
+	fmt.Println(fetchAvailableBalance(c))
+	fmt.Println(fetchUnclaimedBalance(c, "io12mgttmfa2ffn9uqvn0yn37f4nz43d248l2ga85"))
 }
 
 func createBucket(c iotex.AuthedClient, candidateName string) (uint64, error) {
@@ -464,4 +469,57 @@ func buildTotalStakingAmountData() ([]byte, error) {
 		},
 	}
 	return proto.Marshal(arguments)
+}
+
+func fetchTotalBalance(c iotex.AuthedClient) (*big.Int, error) {
+	response, err := c.API().ReadState(context.Background(), &iotexapi.ReadStateRequest{
+		ProtocolID: []byte(protocol.RewardingProtocolID),
+		MethodName: []byte(protocol.ReadTotalBalanceMethodName),
+		Arguments:  nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := new(big.Int).SetString(string(response.Data), 10)
+	if !ok {
+		return nil, errors.New("failed to convert string to big int")
+	}
+	return data, nil
+}
+
+func fetchAvailableBalance(c iotex.AuthedClient) (*big.Int, error) {
+	response, err := c.API().ReadState(context.Background(), &iotexapi.ReadStateRequest{
+		ProtocolID: []byte(protocol.RewardingProtocolID),
+		MethodName: []byte(protocol.ReadAvailableBalanceMethodName),
+		Arguments:  nil,
+		Height:     "",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := new(big.Int).SetString(string(response.Data), 10)
+	if !ok {
+		return nil, errors.New("failed to convert string to big int")
+	}
+	return data, nil
+}
+
+func fetchUnclaimedBalance(c iotex.AuthedClient, addr string) (*big.Int, error) {
+	response, err := c.API().ReadState(context.Background(), &iotexapi.ReadStateRequest{
+		ProtocolID: []byte(protocol.RewardingProtocolID),
+		MethodName: []byte(protocol.ReadUnclaimedBalanceMethodName),
+		Arguments:  [][]byte{[]byte(addr)},
+		Height:     "",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := new(big.Int).SetString(string(response.Data), 10)
+	if !ok {
+		return nil, errors.New("failed to convert string to big int")
+	}
+	return data, nil
 }
